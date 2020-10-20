@@ -23,6 +23,8 @@ import java.util.stream.Collectors;
 
 import com.dremio.nessie.versioned.ImmutableKey;
 import com.dremio.nessie.versioned.Key;
+import com.dremio.nessie.versioned.store.HasId;
+import com.dremio.nessie.versioned.store.Id;
 import com.google.common.base.Suppliers;
 import com.google.common.hash.Hasher;
 import com.google.common.hash.Hashing;

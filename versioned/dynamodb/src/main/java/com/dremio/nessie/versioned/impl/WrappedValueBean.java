@@ -19,6 +19,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.BiFunction;
 
+import com.dremio.nessie.versioned.store.Id;
+import com.dremio.nessie.versioned.store.SimpleSchema;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.protobuf.ByteString;

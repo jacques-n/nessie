@@ -31,13 +31,17 @@ import org.slf4j.LoggerFactory;
 
 import com.dremio.nessie.versioned.ReferenceConflictException;
 import com.dremio.nessie.versioned.ReferenceNotFoundException;
-import com.dremio.nessie.versioned.impl.DynamoStore.ValueType;
 import com.dremio.nessie.versioned.impl.condition.ConditionExpression;
 import com.dremio.nessie.versioned.impl.condition.ExpressionFunction;
 import com.dremio.nessie.versioned.impl.condition.ExpressionPath;
 import com.dremio.nessie.versioned.impl.condition.RemoveClause;
 import com.dremio.nessie.versioned.impl.condition.SetClause;
 import com.dremio.nessie.versioned.impl.condition.UpdateExpression;
+import com.dremio.nessie.versioned.store.Id;
+import com.dremio.nessie.versioned.store.SaveOp;
+import com.dremio.nessie.versioned.store.SimpleSchema;
+import com.dremio.nessie.versioned.store.Store;
+import com.dremio.nessie.versioned.store.ValueType;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
@@ -253,7 +257,7 @@ class InternalBranch extends MemoizedId implements InternalRef {
    * Identify the list of intended commits that need to be completed.
    * @return
    */
-  public UpdateState getUpdateState(DynamoStore store)  {
+  public UpdateState getUpdateState(Store store)  {
     // generate sublist of important commits.
     List<Commit> unsavedCommits = new ArrayList<>();
     Commit lastSavedCommit = null;
@@ -363,7 +367,7 @@ class InternalBranch extends MemoizedId implements InternalRef {
      * @return
      */
     @SuppressWarnings("unchecked")
-    CompletableFuture<InternalBranch> ensureAvailable(DynamoStore store, Executor executor, int attempts, boolean waitOnCollapse) {
+    CompletableFuture<InternalBranch> ensureAvailable(Store store, Executor executor, int attempts, boolean waitOnCollapse) {
       if (saves.isEmpty()) {
         saved = true;
         return CompletableFuture.completedFuture(initialBranch);
@@ -412,7 +416,7 @@ class InternalBranch extends MemoizedId implements InternalRef {
      * @throws ReferenceNotFoundException when branch does not exist.
      * @throws ReferenceConflictException If attempts are depleted and operation cannot be applied due to heavy concurrency
      */
-    private static InternalBranch collapseIntentionLog(UpdateState initialState, DynamoStore store, InternalBranch branch, int attempts)
+    private static InternalBranch collapseIntentionLog(UpdateState initialState, Store store, InternalBranch branch, int attempts)
         throws ReferenceNotFoundException, ReferenceConflictException {
       try {
         for (int attempt = 0; attempt < attempts; attempt++) {

@@ -27,8 +27,12 @@ import java.util.stream.Stream;
 
 import org.immutables.value.Value.Immutable;
 
-import com.dremio.nessie.versioned.impl.DynamoStore.ValueType;
 import com.dremio.nessie.versioned.impl.KeyMutation.MutationType;
+import com.dremio.nessie.versioned.store.HasId;
+import com.dremio.nessie.versioned.store.Id;
+import com.dremio.nessie.versioned.store.SaveOp;
+import com.dremio.nessie.versioned.store.Store;
+import com.dremio.nessie.versioned.store.ValueType;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -53,7 +57,7 @@ abstract class KeyList {
 
   abstract KeyList plus(Id parent, List<KeyMutation> mutations);
 
-  abstract Optional<KeyList> createCheckpointIfNeeded(L1 startingPoint, DynamoStore store);
+  abstract Optional<KeyList> createCheckpointIfNeeded(L1 startingPoint, Store store);
 
   abstract Type getType();
 
@@ -67,7 +71,7 @@ abstract class KeyList {
         .mutations(mutations).build();
   }
 
-  abstract Stream<InternalKey> getKeys(L1 startingPoint, DynamoStore store);
+  abstract Stream<InternalKey> getKeys(L1 startingPoint, Store store);
 
 
   abstract List<KeyMutation> getMutations();
@@ -114,7 +118,7 @@ abstract class KeyList {
     }
 
     @Override
-    public Optional<KeyList> createCheckpointIfNeeded(L1 startingPoint, DynamoStore store) {
+    public Optional<KeyList> createCheckpointIfNeeded(L1 startingPoint, Store store) {
       if (getDistanceFromCheckpointCommits() < MAX_DELTAS) {
         return Optional.empty();
       }
@@ -125,7 +129,7 @@ abstract class KeyList {
 
 
     @Override
-    Stream<InternalKey> getKeys(L1 startingPoint, DynamoStore store) {
+    Stream<InternalKey> getKeys(L1 startingPoint, Store store) {
       IterResult keys = getKeysIter(startingPoint, store);
       if (keys.isChanged()) {
         return keys.keyList;
@@ -134,7 +138,7 @@ abstract class KeyList {
       return keys.list.getKeys(startingPoint, store);
     }
 
-    private CompleteList generateNewCheckpoint(L1 startingPoint, DynamoStore store) {
+    private CompleteList generateNewCheckpoint(L1 startingPoint, Store store) {
 
       IterResult result = getKeysIter(startingPoint, store);
       if (!result.isChanged()) {
@@ -148,7 +152,7 @@ abstract class KeyList {
       return accum.getCompleteList(getMutations());
     }
 
-    private IterResult getKeysIter(L1 startingPoint, DynamoStore store) {
+    private IterResult getKeysIter(L1 startingPoint, Store store) {
       HistoryRetriever retriever = new HistoryRetriever(store, startingPoint, getPreviousCheckpoint(), true, false, true);
       final CompleteList complete;
       // incrementals, from oldest to newest.
@@ -296,7 +300,7 @@ abstract class KeyList {
     }
 
     @Override
-    public Optional<KeyList> createCheckpointIfNeeded(L1 startingPoint, DynamoStore store) {
+    public Optional<KeyList> createCheckpointIfNeeded(L1 startingPoint, Store store) {
       // checkpoint not needed, already a checkpoint.
       return Optional.empty();
     }
@@ -322,7 +326,7 @@ abstract class KeyList {
     }
 
     @Override
-    Stream<InternalKey> getKeys(L1 startingPoint, DynamoStore store) {
+    Stream<InternalKey> getKeys(L1 startingPoint, Store store) {
       return fragmentIds.stream().flatMap(f -> {
         Fragment fragment = store.loadSingle(ValueType.KEY_FRAGMENT, f);
         return fragment.getKeys().stream();
@@ -336,51 +340,6 @@ abstract class KeyList {
   }
 
 
-  static class Fragment extends MemoizedId {
-
-    private final List<InternalKey> keys;
-
-    public Fragment(List<InternalKey> keys) {
-      super();
-      this.keys = ImmutableList.copyOf(keys);
-    }
-
-    @Override
-    Id generateId() {
-      return Id.build(h -> {
-        keys.stream().forEach(k -> InternalKey.addToHasher(k, h));
-      });
-    }
-
-    public List<InternalKey> getKeys() {
-      return keys;
-    }
-
-    public static final SimpleSchema<Fragment> SCHEMA = new SimpleSchema<Fragment>(Fragment.class) {
-      private static final String ID = "id";
-      private static final String KEYS = "keys";
-
-      @Override
-      public Fragment deserialize(Map<String, AttributeValue> attributeMap) {
-        List<InternalKey> keys = attributeMap.get(KEYS).l().stream().map(InternalKey::fromAttributeValue).collect(Collectors.toList());
-        return new Fragment(keys);
-      }
-
-      @Override
-      public Map<String, AttributeValue> itemToMap(Fragment item, boolean ignoreNulls) {
-        return ImmutableMap.<String, AttributeValue>builder()
-            .put(ID, item.getId().toAttributeValue())
-            .put(KEYS, AttributeValue.builder()
-                .l(item.getKeys().stream().map(InternalKey::toAttributeValue).collect(Collectors.toList()))
-                .build())
-            .build();
-      }
-
-    };
-
-  }
-
-
   /**
    * Accumulates keys until we have enough to fill the ~max DynamoDB record size.
    *
@@ -390,13 +349,13 @@ abstract class KeyList {
    */
   static class KeyAccumulator {
     private static final int MAX_SIZE = 400_000 - 8096;
-    private DynamoStore store;
+    private Store store;
     private Set<Id> presaved;
     private List<InternalKey> currentList = new ArrayList<>();
     private List<Id> fragmentIds = new ArrayList<>();
     private int currentListSize;
 
-    public KeyAccumulator(DynamoStore store, Set<Id> presaved) {
+    public KeyAccumulator(Store store, Set<Id> presaved) {
       super();
       this.store = store;
       this.presaved = presaved;

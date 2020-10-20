@@ -23,6 +23,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
+import com.dremio.nessie.versioned.store.Id;
+
 public class TestIdMap {
 
   private final Id id1 = Id.generateRandom();

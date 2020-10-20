@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.dremio.nessie.versioned.impl;
+package com.dremio.nessie.versioned.store;
 
 import java.util.Collection;
 import java.util.Map;
@@ -30,7 +30,7 @@ import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
  * <p>Inspired by Dynamo's extended library and originally extended from it.
  * @param <T> The value type to be serialized/deserialized.
  */
-abstract class SimpleSchema<T> {
+public abstract class SimpleSchema<T> {
 
   public SimpleSchema(Class<T> clazz) {
   }

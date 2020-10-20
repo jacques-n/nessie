@@ -48,7 +48,6 @@ import com.dremio.nessie.versioned.Unchanged;
 import com.dremio.nessie.versioned.VersionStore;
 import com.dremio.nessie.versioned.WithHash;
 import com.dremio.nessie.versioned.impl.DiffFinder.KeyDiff;
-import com.dremio.nessie.versioned.impl.DynamoStore.ValueType;
 import com.dremio.nessie.versioned.impl.HistoryRetriever.HistoryItem;
 import com.dremio.nessie.versioned.impl.InternalBranch.Commit;
 import com.dremio.nessie.versioned.impl.InternalBranch.UpdateState;
@@ -59,6 +58,12 @@ import com.dremio.nessie.versioned.impl.condition.ConditionExpression;
 import com.dremio.nessie.versioned.impl.condition.ExpressionFunction;
 import com.dremio.nessie.versioned.impl.condition.ExpressionPath;
 import com.dremio.nessie.versioned.impl.condition.SetClause;
+import com.dremio.nessie.versioned.store.Id;
+import com.dremio.nessie.versioned.store.LoadOp;
+import com.dremio.nessie.versioned.store.LoadStep;
+import com.dremio.nessie.versioned.store.SaveOp;
+import com.dremio.nessie.versioned.store.Store;
+import com.dremio.nessie.versioned.store.ValueType;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
@@ -78,7 +83,7 @@ public class DynamoVersionStore<DATA, METADATA> implements VersionStore<DATA, ME
   private final Serializer<METADATA> metadataSerializer;
   private final StoreWorker<DATA,METADATA> storeWorker;
   private final ExecutorService executor;
-  private DynamoStore store;
+  private Store store;
   private final int commitRetryCount = 5;
   private final int p2commitRetry = 5;
   private final boolean waitOnCollapse;
@@ -86,7 +91,7 @@ public class DynamoVersionStore<DATA, METADATA> implements VersionStore<DATA, ME
   /**
    * Construct a Dynamo VersionStore.
    */
-  public DynamoVersionStore(StoreWorker<DATA,METADATA> storeWorker, DynamoStore store, boolean waitOnCollapse) {
+  public DynamoVersionStore(StoreWorker<DATA,METADATA> storeWorker, Store store, boolean waitOnCollapse) {
     this.serializer = storeWorker.getValueSerializer();
     this.metadataSerializer = storeWorker.getMetadataSerializer();
     this.store = store;

@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.dremio.nessie.versioned.impl;
+package com.dremio.nessie.versioned.store;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -22,12 +22,11 @@ import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.stream.Collector;
 
-import com.dremio.nessie.versioned.impl.DynamoStore.ValueType;
 import com.google.common.base.Preconditions;
 
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 
-class LoadOp<V extends HasId> {
+public class LoadOp<V extends HasId> {
   private final ValueType type;
   private final Id id;
   private final Consumer<V> consumer;
@@ -38,7 +37,7 @@ class LoadOp<V extends HasId> {
     this.consumer = consumer;
   }
 
-  void loaded(Map<String, AttributeValue> load) {
+  public void loaded(Map<String, AttributeValue> load) {
     SimpleSchema<V> schema = type.getSchema();
     consumer.accept(schema.mapToItem(type.checkType(load)));
   }

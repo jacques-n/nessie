@@ -17,6 +17,8 @@ package com.dremio.nessie.versioned.impl;
 
 import java.util.Map;
 
+import com.dremio.nessie.versioned.store.Id;
+import com.dremio.nessie.versioned.store.SimpleSchema;
 import com.google.common.collect.ImmutableMap;
 
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;

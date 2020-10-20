@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.dremio.nessie.versioned.impl;
+package com.dremio.nessie.versioned.store;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -26,6 +26,7 @@ import java.util.function.Consumer;
 
 import com.dremio.nessie.versioned.Hash;
 import com.dremio.nessie.versioned.ReferenceNotFoundException;
+import com.dremio.nessie.versioned.impl.InternalRef;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.hash.Hasher;
@@ -37,7 +38,7 @@ import com.google.protobuf.UnsafeByteOperations;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 
-final class Id implements InternalRef {
+public final class Id implements InternalRef {
 
   public static final int LENGTH = 20;
   public static final Id EMPTY = new Id(ByteString.copyFrom(new byte[LENGTH]));
@@ -181,7 +182,7 @@ final class Id implements InternalRef {
   }
 
   public Map<String, AttributeValue> toKeyMap() {
-    return ImmutableMap.of(DynamoStore.KEY_NAME, this.toAttributeValue());
+    return ImmutableMap.of(Store.KEY_NAME, this.toAttributeValue());
   }
 
   public static Id fromAttributeValue(AttributeValue value) {

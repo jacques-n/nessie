@@ -20,6 +20,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import com.dremio.nessie.versioned.store.Id;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterators;
 

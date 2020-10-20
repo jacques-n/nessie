@@ -20,6 +20,9 @@ import java.util.Map;
 
 import com.dremio.nessie.versioned.impl.condition.ExpressionFunction;
 import com.dremio.nessie.versioned.impl.condition.ExpressionPath;
+import com.dremio.nessie.versioned.store.HasId;
+import com.dremio.nessie.versioned.store.Id;
+import com.dremio.nessie.versioned.store.SimpleSchema;
 import com.google.common.collect.Maps;
 
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
@@ -27,7 +30,7 @@ import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 /**
  * Generic class for reading a reference.
  */
-interface InternalRef extends HasId {
+public interface InternalRef extends HasId {
 
   static final String TYPE = "type";
 

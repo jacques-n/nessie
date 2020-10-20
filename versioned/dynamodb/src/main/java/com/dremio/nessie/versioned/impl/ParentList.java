@@ -21,6 +21,7 @@ import java.util.stream.Stream;
 
 import org.immutables.value.Value.Immutable;
 
+import com.dremio.nessie.versioned.store.Id;
 import com.google.common.collect.ImmutableList;
 
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;

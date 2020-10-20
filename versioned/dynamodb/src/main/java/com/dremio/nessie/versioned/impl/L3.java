@@ -25,20 +25,22 @@ import java.util.stream.Stream;
 import com.dremio.nessie.versioned.impl.DiffFinder.KeyDiff;
 import com.dremio.nessie.versioned.impl.KeyMutation.KeyAddition;
 import com.dremio.nessie.versioned.impl.KeyMutation.KeyRemoval;
+import com.dremio.nessie.versioned.store.Id;
+import com.dremio.nessie.versioned.store.SimpleSchema;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.MapDifference;
 import com.google.common.collect.Maps;
 
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 
-class L3 extends MemoizedId {
+public class L3 extends MemoizedId {
 
   private static final long HASH_SEED = 4604180344422375655L;
 
   private final TreeMap<InternalKey, PositionDelta> map;
 
-  static L3 EMPTY = new L3(new TreeMap<>());
-  static Id EMPTY_ID = EMPTY.getId();
+  public static L3 EMPTY = new L3(new TreeMap<>());
+  public static Id EMPTY_ID = EMPTY.getId();
 
   private L3(TreeMap<InternalKey, PositionDelta> keys) {
     this(null, keys);
@@ -108,7 +110,7 @@ class L3 extends MemoizedId {
   }
 
 
-  static final SimpleSchema<L3> SCHEMA = new SimpleSchema<L3>(L3.class) {
+  public static final SimpleSchema<L3> SCHEMA = new SimpleSchema<L3>(L3.class) {
 
     private static final String ID = "id";
     private static final String TREE = "tree";

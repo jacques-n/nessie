@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.dremio.nessie.versioned.impl;
+package com.dremio.nessie.versioned.store.dynamo;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -30,12 +30,23 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.dremio.nessie.versioned.ReferenceNotFoundException;
-import com.dremio.nessie.versioned.impl.KeyList.Fragment;
+import com.dremio.nessie.versioned.impl.DynamoStoreConfig;
+import com.dremio.nessie.versioned.impl.InternalRef;
+import com.dremio.nessie.versioned.impl.L1;
+import com.dremio.nessie.versioned.impl.L2;
+import com.dremio.nessie.versioned.impl.L3;
 import com.dremio.nessie.versioned.impl.condition.AliasCollector;
 import com.dremio.nessie.versioned.impl.condition.ConditionExpression;
 import com.dremio.nessie.versioned.impl.condition.ExpressionFunction;
 import com.dremio.nessie.versioned.impl.condition.ExpressionPath;
 import com.dremio.nessie.versioned.impl.condition.UpdateExpression;
+import com.dremio.nessie.versioned.store.Id;
+import com.dremio.nessie.versioned.store.LoadOp;
+import com.dremio.nessie.versioned.store.LoadStep;
+import com.dremio.nessie.versioned.store.SaveOp;
+import com.dremio.nessie.versioned.store.SimpleSchema;
+import com.dremio.nessie.versioned.store.Store;
+import com.dremio.nessie.versioned.store.ValueType;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
@@ -79,83 +90,9 @@ import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemResponse;
 import software.amazon.awssdk.services.dynamodb.model.WriteRequest;
 
-public class DynamoStore implements AutoCloseable {
+public class DynamoStore implements Store {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(DynamoStore.class);
-
-  public static enum ValueType {
-
-    REF(InternalRef.class, InternalRef.SCHEMA, false, "r"),
-    L1(L1.class, com.dremio.nessie.versioned.impl.L1.SCHEMA, "l1"),
-    L2(L2.class, com.dremio.nessie.versioned.impl.L2.SCHEMA, "l2"),
-    L3(L3.class, com.dremio.nessie.versioned.impl.L3.SCHEMA, "l3"),
-    VALUE(InternalValue.class, InternalValue.SCHEMA, "v"),
-    KEY_FRAGMENT(Fragment.class, Fragment.SCHEMA, "k"),
-    COMMIT_METADATA(InternalCommitMetadata.class, InternalCommitMetadata.SCHEMA, "m");
-
-    public static String SCHEMA_TYPE = "t";
-
-    private final Class<?> objectClass;
-    private final SimpleSchema<?> schema;
-    private final boolean immutable;
-    private final AttributeValue type;
-
-    ValueType(Class<?> objectClass, SimpleSchema<?> schema, String valueName) {
-      this(objectClass, schema, true, valueName);
-    }
-
-    ValueType(Class<?> objectClass, SimpleSchema<?> schema, boolean immutable, String valueName) {
-      this.objectClass = objectClass;
-      this.schema = schema;
-      this.immutable = immutable;
-      this.type = AttributeValue.builder().s(valueName).build();
-    }
-
-    public Class<?> getObjectClass() {
-      return objectClass;
-    }
-
-    /**
-     * Append this type to the provided attribute value map.
-     * @param map The map to append to
-     * @return A typed map.
-     */
-    public Map<String, AttributeValue> addType(Map<String, AttributeValue> map) {
-      return ImmutableMap.<String, AttributeValue>builder()
-          .putAll(map)
-          .put(ValueType.SCHEMA_TYPE, type).build();
-    }
-
-    /**
-     * Validate that the provided map includes the expected type.
-     * @param map The map to check
-     * @return The map passed in (for chaining)
-     */
-    public Map<String, AttributeValue> checkType(Map<String, AttributeValue> map) {
-      AttributeValue loadedType = map.get(SCHEMA_TYPE);
-      Id id = Id.fromAttributeValue(map.get(KEY_NAME));
-      Preconditions.checkNotNull(loadedType, "Missing type tag for schema for id %s.", id.getHash());
-      Preconditions.checkArgument(type.equals(loadedType),
-          "Expected schema for id %s to be of type '%s' but is actually '%s'.", id.getHash(), type.s(), loadedType.s());
-      return map;
-    }
-
-    public ConditionExpression addTypeCheck(Optional<ConditionExpression> possibleExpression) {
-      final ExpressionFunction checkType = ExpressionFunction.equals(ExpressionPath.builder(SCHEMA_TYPE).build(), type);
-      return possibleExpression.map(ce -> ce.and(checkType)).orElse(ConditionExpression.of(checkType));
-    }
-
-    @SuppressWarnings("unchecked")
-    public <T> SimpleSchema<T> getSchema() {
-      return (SimpleSchema<T>) schema;
-    }
-
-    public boolean isImmutable() {
-      return immutable;
-    }
-  }
-
-  static final String KEY_NAME = "id";
 
   private final int paginationSize = 100;
   private final DynamoStoreConfig config;
@@ -180,9 +117,7 @@ public class DynamoStore implements AutoCloseable {
         .build();
   }
 
-  /**
-   * start the DynamoStore.
-   */
+  @Override
   public void start() {
     DynamoDbClientBuilder b1 = DynamoDbClient.builder();
     b1.httpClient(UrlConnectionHttpClient.create());
@@ -220,15 +155,8 @@ public class DynamoStore implements AutoCloseable {
     client.close();
   }
 
-  /**
-   * Load the collection of loadsteps in order.
-   *
-   * <p>This Will fail if any load within any step. Consumers are informed as the
-   * records are loaded so this load may leave inputs in a partial state.
-   *
-   * @param loadstep The step to load
-   */
-  void load(LoadStep loadstep) throws ReferenceNotFoundException {
+  @Override
+  public void load(LoadStep loadstep) throws ReferenceNotFoundException {
 
     while (true) { // for each load step in the chain.
       List<ListMultimap<String, LoadOp<?>>> stepPages = paginateLoads(loadstep, paginationSize);
@@ -292,7 +220,8 @@ public class DynamoStore implements AutoCloseable {
     return paginated;
   }
 
-  <V> boolean putIfAbsent(ValueType type, V value) {
+  @Override
+  public <V> boolean putIfAbsent(ValueType type, V value) {
     ConditionExpression condition = ConditionExpression.of(ExpressionFunction.attributeNotExists(ExpressionPath.builder(KEY_NAME).build()));
     try {
       put(type, value, Optional.of(condition));
@@ -302,12 +231,8 @@ public class DynamoStore implements AutoCloseable {
     }
   }
 
-  String tableName(ValueType valueType) {
-    return tableNames.get(valueType);
-  }
-
   @VisibleForTesting
-  void deleteTables() {
+  public void deleteTables() {
     Arrays.stream(ValueType.values()).map(v -> tableNames.get(v)).collect(Collectors.toSet()).forEach(table -> {
       try {
         client.deleteTable(DeleteTableRequest.builder().tableName(table).build());
@@ -318,11 +243,12 @@ public class DynamoStore implements AutoCloseable {
 
   }
 
+  @Override
   @SuppressWarnings("unchecked")
-  <V> void put(ValueType type, V value, Optional<ConditionExpression> conditionUnAliased) {
+  public <V> void put(ValueType type, V value, Optional<ConditionExpression> conditionUnAliased) {
     Preconditions.checkArgument(type.getObjectClass().isAssignableFrom(value.getClass()),
         "ValueType %s doesn't extend expected type %s.", value.getClass().getName(), type.getObjectClass().getName());
-    Map<String, AttributeValue> attributes = type.addType(((SimpleSchema<V>)type.schema).itemToMap(value, true));
+    Map<String, AttributeValue> attributes = type.addType(((SimpleSchema<V>)type.getSchema()).itemToMap(value, true));
 
     PutItemRequest.Builder builder = PutItemRequest.builder()
         .tableName(tableNames.get(type))
@@ -336,7 +262,8 @@ public class DynamoStore implements AutoCloseable {
     client.putItem(builder.build());
   }
 
-  boolean delete(ValueType type, Id id, Optional<ConditionExpression> condition) {
+  @Override
+  public boolean delete(ValueType type, Id id, Optional<ConditionExpression> condition) {
     DeleteItemRequest.Builder delete = DeleteItemRequest.builder()
         .key(id.toKeyMap())
         .tableName(tableNames.get(type));
@@ -355,7 +282,8 @@ public class DynamoStore implements AutoCloseable {
     }
   }
 
-  void save(List<SaveOp<?>> ops) {
+  @Override
+  public void save(List<SaveOp<?>> ops) {
     List<CompletableFuture<BatchWriteItemResponse>> saves =  new ArrayList<>();
     for (int i = 0; i < ops.size(); i += paginationSize) {
 
@@ -378,8 +306,9 @@ public class DynamoStore implements AutoCloseable {
     }
   }
 
+  @Override
   @SuppressWarnings("unchecked")
-  <V> V loadSingle(ValueType valueType, Id id) {
+  public <V> V loadSingle(ValueType valueType, Id id) {
     GetItemResponse response = client.getItem(GetItemRequest.builder()
         .tableName(tableNames.get(valueType))
         .key(ImmutableMap.of(KEY_NAME, id.toAttributeValue()))
@@ -388,22 +317,12 @@ public class DynamoStore implements AutoCloseable {
     if (!response.hasItem()) {
       throw ResourceNotFoundException.builder().message("Unable to load item.").build();
     }
-    return (V) valueType.schema.mapToItem(valueType.checkType(response.item()));
+    return (V) valueType.getSchema().mapToItem(valueType.checkType(response.item()));
   }
 
-  /**
-   * Do a conditional update. If the condition succeeds, return the values in the object. If it fails, return a Optional.empty().
-   *
-   * @param <IN> The value type class that the UpdateExpression will be applied to.
-   * @param <OUT> The value type class that the return expression is expected to be.
-   * @param input The value type class that the UpdateExpression will be applied to.
-   * @param update The update expression to use.
-   * @param condition The optional condition to consider before applying the update.
-   * @return The complete value if the update was successful, otherwise Optional.empty()
-   * @throws ReferenceNotFoundException Thrown if the underlying id doesn't have an object.
-   */
+  @Override
   @SuppressWarnings("unchecked")
-  <V> Optional<V> update(ValueType type, Id id, UpdateExpression update, Optional<ConditionExpression> condition)
+  public <V> Optional<V> update(ValueType type, Id id, UpdateExpression update, Optional<ConditionExpression> condition)
       throws ReferenceNotFoundException {
     try {
       AliasCollector collector = new AliasCollector();
@@ -417,7 +336,7 @@ public class DynamoStore implements AutoCloseable {
       aliasedCondition.ifPresent(e -> updateRequest.conditionExpression(e.toConditionExpressionString()));
       UpdateItemRequest builtRequest = updateRequest.build();
       UpdateItemResponse response = client.updateItem(builtRequest);
-      return (Optional<V>) Optional.of(type.schema.mapToItem(response.attributes()));
+      return (Optional<V>) Optional.of(type.getSchema().mapToItem(response.attributes()));
     } catch (ResourceNotFoundException ex) {
       throw new ReferenceNotFoundException("Unable to find value.", ex);
     } catch (ConditionalCheckFailedException checkFailed) {
@@ -438,7 +357,8 @@ public class DynamoStore implements AutoCloseable {
     }
   }
 
-  Stream<InternalRef> getRefs() {
+  @Override
+  public Stream<InternalRef> getRefs() {
     return client.scanPaginator(ScanRequest.builder().tableName(tableNames.get(ValueType.REF)).build())
         .stream()
         .flatMap(r -> r.items().stream())
