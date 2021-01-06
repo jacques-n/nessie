@@ -22,17 +22,23 @@ import com.dremio.nessie.versioned.store.Id;
 import com.dremio.nessie.versioned.store.SimpleSchema;
 import com.google.common.collect.ImmutableMap;
 
-class InternalTag extends MemoizedId implements InternalRef {
+public class InternalTag extends MemoizedId implements InternalRef {
 
   static final String ID = "id";
   static final String NAME = "name";
   static final String COMMIT = "commit";
 
-  private String name;
-  private Id commit;
+  private final String name;
+  private final Id commit;
+  private final long dt;
 
   InternalTag(Id id, String name, Id commit) {
+    this(id, name, commit, 0);
+  }
+
+  private InternalTag(Id id, String name, Id commit, long dt) {
     super(id);
+    this.dt = dt;
     this.name = name;
     this.commit = commit;
   }
@@ -50,25 +56,29 @@ class InternalTag extends MemoizedId implements InternalRef {
     return commit;
   }
 
+  public long getDt() {
+    return dt;
+  }
+
   public Map<String, Entity> conditionMap() {
     return ImmutableMap.of(COMMIT, commit.toEntity());
   }
 
   static final SimpleSchema<InternalTag> SCHEMA = new SimpleSchema<InternalTag>(InternalTag.class) {
 
-
     @Override
     public InternalTag deserialize(Map<String, Entity> attributeMap) {
       return new InternalTag(
           Id.fromEntity(attributeMap.get(ID)),
           attributeMap.get(NAME).getString(),
-          Id.fromEntity(attributeMap.get(COMMIT))
+          Id.fromEntity(attributeMap.get(COMMIT)),
+          DTMap.from(attributeMap)
           );
     }
 
     @Override
     public Map<String, Entity> itemToMap(InternalTag item, boolean ignoreNulls) {
-      return ImmutableMap.<String, Entity>builder()
+      return DTMap.create()
           .put(ID, item.getId().toEntity())
           .put(COMMIT, item.commit.toEntity())
           .put(NAME, Entity.ofString(item.name))

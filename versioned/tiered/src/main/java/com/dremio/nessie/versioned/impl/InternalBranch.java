@@ -106,7 +106,7 @@ import com.google.common.primitives.Ints;
  * <li>The ids for all saved commits will exist in the L1 table.
  * </ol>
  */
-class InternalBranch extends MemoizedId implements InternalRef {
+public class InternalBranch extends MemoizedId implements InternalRef {
 
   static final String ID = "id";
   static final String NAME = "name";
@@ -122,13 +122,14 @@ class InternalBranch extends MemoizedId implements InternalRef {
   private final IdMap tree;
   private final Id metadata;
   private final List<Commit> commits;
+  private final long dt;
 
   /**
    * Create an empty branch.
    * @param name name of the branch.
    */
   public InternalBranch(String name) {
-    this(InternalRefId.ofBranch(name).getId(), name, L1.EMPTY.getMap(), Id.EMPTY, SINGLE_EMPTY_COMMIT);
+    this(InternalRefId.ofBranch(name).getId(), name, L1.EMPTY.getMap(), Id.EMPTY, SINGLE_EMPTY_COMMIT, 0);
   }
 
   /**
@@ -138,21 +139,37 @@ class InternalBranch extends MemoizedId implements InternalRef {
    */
   public InternalBranch(String name, L1 target) {
     this(InternalRefId.ofBranch(name).getId(), name, target.getMap(), Id.EMPTY,
-        ImmutableList.of(new Commit(target.getId(), target.getMetadataId(), target.getParentId())));
+        ImmutableList.of(new Commit(target.getId(), target.getMetadataId(), target.getParentId())), 0);
   }
 
-  private InternalBranch(Id id, String name, IdMap tree, Id metadata, List<Commit> commits) {
+  private InternalBranch(Id id, String name, IdMap tree, Id metadata, List<Commit> commits, long dt) {
     super(id);
     this.metadata = metadata;
     this.name = name;
     this.tree = tree;
     this.commits = commits;
+    this.dt = dt;
     assert tree.size() == L1.SIZE;
     ensureConsistentId();
   }
 
   public String getName() {
     return name;
+  }
+
+  public Id getLastDefinedParent() {
+    for (Commit c : Lists.reverse(commits)) {
+      if (c.isSaved()) {
+        return c.id;
+      }
+    }
+
+    throw new IllegalStateException("Unable to determine last defined parent.");
+  }
+
+  @Override
+  public long getDt() {
+    return dt;
   }
 
   public static final class Commit {
@@ -546,13 +563,14 @@ class InternalBranch extends MemoizedId implements InternalRef {
           attributeMap.get(NAME).getString(),
           IdMap.fromEntity(attributeMap.get(TREE), L1.SIZE),
           Id.fromEntity(attributeMap.get(METADATA)),
-          attributeMap.get(COMMITS).getList().stream().map(av -> Commit.SCHEMA.mapToItem(av.getMap())).collect(Collectors.toList())
+          attributeMap.get(COMMITS).getList().stream().map(av -> Commit.SCHEMA.mapToItem(av.getMap())).collect(Collectors.toList()),
+          DTMap.from(attributeMap)
       );
     }
 
     @Override
     public Map<String, Entity> itemToMap(InternalBranch item, boolean ignoreNulls) {
-      return ImmutableMap.<String, Entity>builder()
+      return DTMap.create()
           .put(ID, item.getId().toEntity())
           .put(NAME, Entity.ofString(item.name))
           .put(METADATA, item.metadata.toEntity())
@@ -571,6 +589,11 @@ class InternalBranch extends MemoizedId implements InternalRef {
   @Override
   public InternalBranch getBranch() {
     return this;
+  }
+
+  @Override
+  public String toString() {
+    return "InternalBranch [name=" + name + ", dt=" + dt + "]";
   }
 
 }

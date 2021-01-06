@@ -15,31 +15,34 @@
  */
 package com.dremio.nessie.versioned.impl;
 
+import java.util.Iterator;
 import java.util.Map;
 
 import com.dremio.nessie.versioned.store.Entity;
 import com.dremio.nessie.versioned.store.Id;
 import com.dremio.nessie.versioned.store.SimpleSchema;
-import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Iterators;
 
-public class L2 extends MemoizedId {
+public class L2 extends MemoizedId implements Iterable<Id> {
 
   private static final long HASH_SEED = -6352836103271505167L;
 
   public static final int SIZE = 199;
-  public static L2 EMPTY = new L2(null, new IdMap(SIZE, L3.EMPTY_ID));
+  public static L2 EMPTY = new L2(null, new IdMap(SIZE, L3.EMPTY_ID), 0);
   public static Id EMPTY_ID = EMPTY.getId();
 
   private final IdMap map;
+  private final long dt;
 
-  private L2(Id id, IdMap map) {
+  private L2(Id id, IdMap map, long dt) {
     super(id);
     assert map.size() == SIZE;
     this.map = map;
+    this.dt = dt;
   }
 
   private L2(IdMap map) {
-    this(null, map);
+    this(null, map, 0);
   }
 
 
@@ -68,19 +71,26 @@ public class L2 extends MemoizedId {
     public L2 deserialize(Map<String, Entity> attributeMap) {
       return new L2(
           Id.fromEntity(attributeMap.get(ID)),
-          IdMap.fromEntity(attributeMap.get(TREE), SIZE)
+          IdMap.fromEntity(attributeMap.get(TREE), SIZE),
+          DTMap.from(attributeMap)
       );
     }
 
     @Override
     public Map<String, Entity> itemToMap(L2 item, boolean ignoreNulls) {
-      return ImmutableMap.<String, Entity>builder()
+      return DTMap.create()
           .put(TREE, item.map.toEntity())
           .put(ID, item.getId().toEntity())
           .build();
     }
 
   };
+
+
+  @Override
+  public Iterator<Id> iterator() {
+    return Iterators.unmodifiableIterator(map.iterator());
+  }
 
   /**
    * return the number of positions that are non-empty.

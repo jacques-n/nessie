@@ -79,6 +79,10 @@ public interface InternalRef extends HasId {
 
   Type getType();
 
+  String getName();
+
+  long getDt();
+
   default InternalBranch getBranch() {
     throw new IllegalArgumentException(String.format("%s cannot be treated as a branch.", this.getClass().getName()));
   }

@@ -126,6 +126,10 @@ public final class Id implements InternalRef {
     return this.equals(Id.EMPTY);
   }
 
+  public boolean isNonEmpty() {
+    return !isEmpty();
+  }
+
   @Override
   public int hashCode() {
     return getValue().hashCode();

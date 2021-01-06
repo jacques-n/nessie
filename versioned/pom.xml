@@ -39,5 +39,6 @@
     <module>tests</module>
     <module>tiered</module>
     <module>tiered-tests</module>
+    <module>gc</module>
   </modules>
 </project>

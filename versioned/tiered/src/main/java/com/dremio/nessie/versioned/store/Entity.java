@@ -195,7 +195,7 @@ public abstract class Entity {
 
   }
 
-  private static final class MapEntity extends Entity {
+  public static final class MapEntity extends Entity {
 
     private final ImmutableMap<String, Entity> map;
 

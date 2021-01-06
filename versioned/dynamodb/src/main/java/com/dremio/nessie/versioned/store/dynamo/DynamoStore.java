@@ -29,7 +29,6 @@ import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.dremio.nessie.versioned.impl.InternalRef;
 import com.dremio.nessie.versioned.impl.L1;
 import com.dremio.nessie.versioned.impl.L2;
 import com.dremio.nessie.versioned.impl.L3;
@@ -69,6 +68,7 @@ import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemResponse;
 import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException;
 import software.amazon.awssdk.services.dynamodb.model.CreateTableRequest;
+import software.amazon.awssdk.services.dynamodb.model.CreateTableResponse;
 import software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.DeleteTableRequest;
 import software.amazon.awssdk.services.dynamodb.model.DescribeTableRequest;
@@ -380,10 +380,10 @@ public class DynamoStore implements Store {
   @SuppressWarnings("unchecked")
   @Override
   public <V> Stream<V> getValues(Class<V> valueClass, ValueType type) {
-    return ((Stream<V>) client.scanPaginator(ScanRequest.builder().tableName(tableNames.get(type)).build())
+    return (client.scanPaginator(ScanRequest.builder().tableName(tableNames.get(type)).build())
         .stream()
         .flatMap(r -> r.items().stream())
-        .map(i -> type.<InternalRef>getSchema().mapToItem(AttributeValueUtil.toEntity(i))));
+        .map(i -> type.<V>getSchema().mapToItem(AttributeValueUtil.toEntity(i))));
   }
 
   private final void createIfMissing(String name) {

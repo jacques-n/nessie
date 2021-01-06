@@ -15,17 +15,19 @@
  */
 package com.dremio.nessie.versioned.impl;
 
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 import com.dremio.nessie.versioned.store.Entity;
 import com.dremio.nessie.versioned.store.Id;
 import com.dremio.nessie.versioned.store.SimpleSchema;
 import com.dremio.nessie.versioned.store.Store;
-import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Iterators;
 
-public class L1 extends MemoizedId {
+public class L1 extends MemoizedId implements Iterable<Id> {
 
   private static final long HASH_SEED = 3506039963025592061L;
 
@@ -38,14 +40,21 @@ public class L1 extends MemoizedId {
   private final Id metadataId;
   private final KeyList keyList;
   private final ParentList parentList;
+  private final long dt;
+  private final long gcMark;
 
   private L1(Id commitId, IdMap tree, Id id, KeyList keyList, ParentList parentList) {
+    this(commitId, tree, id, keyList, parentList, 0, 0);
+  }
+
+  private L1(Id commitId, IdMap tree, Id id, KeyList keyList, ParentList parentList, long dt, long gcMark) {
     super(id);
     this.metadataId = commitId;
     this.parentList = parentList;
     this.keyList = keyList;
     this.tree = tree;
-
+    this.dt = dt;
+    this.gcMark = gcMark;
     assert tree.size() == SIZE;
     assert id == null || id.equals(generateId());
   }
@@ -64,16 +73,32 @@ public class L1 extends MemoizedId {
     return tree.getId(position);
   }
 
+  public long getDt() {
+    return dt;
+  }
+
   Id getMetadataId() {
     return metadataId;
+  }
+
+  public Stream<Id> getL2References() {
+    return StreamSupport.stream(tree.spliterator(), false);
   }
 
   ParentList getParentList() {
     return parentList;
   }
 
-  Id getParentId() {
+  public Stream<Id> getParents() {
+    return parentList.getParents().stream();
+  }
+
+  public Id getParentId() {
     return parentList.getParent();
+  }
+
+  long getGcMark() {
+    return gcMark;
   }
 
   L1 set(int position, Id l2Id) {
@@ -109,6 +134,7 @@ public class L1 extends MemoizedId {
     private static final String METADATA = "metadata";
     private static final String PARENTS = "parents";
     private static final String KEY_LIST = "keys";
+    private static final String GC_MARK = "gc";
 
     @Override
     public L1 deserialize(Map<String, Entity> attributeMap) {
@@ -117,18 +143,21 @@ public class L1 extends MemoizedId {
           IdMap.fromEntity(attributeMap.get(TREE), SIZE),
           Id.fromEntity(attributeMap.get(ID)),
           KeyList.fromEntity(attributeMap.get(KEY_LIST)),
-          ParentList.fromEntity(attributeMap.get(PARENTS))
+          ParentList.fromEntity(attributeMap.get(PARENTS)),
+          DTMap.from(attributeMap),
+          attributeMap.getOrDefault(GC_MARK, Entity.ofNumber(0)).getNumber()
       );
     }
 
     @Override
     public Map<String, Entity> itemToMap(L1 item, boolean ignoreNulls) {
-      return ImmutableMap.<String, Entity>builder()
+      return DTMap.create()
           .put(METADATA, item.metadataId.toEntity())
           .put(TREE, item.tree.toEntity())
           .put(ID, item.getId().toEntity())
           .put(KEY_LIST, item.keyList.toEntity())
           .put(PARENTS, item.parentList.toEntity())
+          .put(GC_MARK, Entity.ofNumber(item.gcMark))
           .build();
     }
 
@@ -136,6 +165,11 @@ public class L1 extends MemoizedId {
 
   KeyList getKeyList() {
     return keyList;
+  }
+
+  @Override
+  public Iterator<Id> iterator() {
+    return Iterators.unmodifiableIterator(tree.iterator());
   }
 
   /**

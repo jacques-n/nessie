@@ -15,6 +15,7 @@
  */
 package com.dremio.nessie.versioned.impl;
 
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -32,7 +33,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.MapDifference;
 import com.google.common.collect.Maps;
 
-public class L3 extends MemoizedId {
+public class L3 extends MemoizedId implements Iterable<Id> {
 
   private static final long HASH_SEED = 4604180344422375655L;
 
@@ -41,13 +42,16 @@ public class L3 extends MemoizedId {
   public static L3 EMPTY = new L3(new TreeMap<>());
   public static Id EMPTY_ID = EMPTY.getId();
 
+  private final long dt;
+
   private L3(TreeMap<InternalKey, PositionDelta> keys) {
-    this(null, keys);
+    this(null, keys, 0);
   }
 
-  private L3(Id id, TreeMap<InternalKey, PositionDelta> keys) {
+  private L3(Id id, TreeMap<InternalKey, PositionDelta> keys, long dt) {
     super(id);
     this.map = keys;
+    this.dt = dt;
     ensureConsistentId();
   }
 
@@ -57,6 +61,10 @@ public class L3 extends MemoizedId {
       return Id.EMPTY;
     }
     return delta.getNewId();
+  }
+
+  public long getDt() {
+    return dt;
   }
 
   /**
@@ -128,7 +136,8 @@ public class L3 extends MemoizedId {
 
       return new L3(
           Id.fromEntity(attributeMap.get(ID)),
-          tree
+          tree,
+          DTMap.from(attributeMap)
       );
     }
 
@@ -144,7 +153,7 @@ public class L3 extends MemoizedId {
                 TREE_ID, pm.getNewId().toEntity());
             return Entity.ofMap(pmm);
           }).collect(Collectors.toList());
-      return ImmutableMap.<String, Entity>builder()
+      return DTMap.create()
           .put(TREE, Entity.ofList(values))
           .put(ID, item.getId().toEntity())
           .build();
@@ -197,5 +206,10 @@ public class L3 extends MemoizedId {
         Stream.concat(
             difference.entriesOnlyOnLeft().entrySet().stream().map(KeyDiff::onlyOnLeft),
             difference.entriesOnlyOnRight().entrySet().stream().map(KeyDiff::onlyOnRight)));
+  }
+
+  @Override
+  public Iterator<Id> iterator() {
+    return map.values().stream().filter(p -> !p.isEmpty()).map(PositionDelta::getNewId).iterator();
   }
 }
